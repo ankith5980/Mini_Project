@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# Sensitive files
+.env
+.env.*
+!.env.example
+*.log
