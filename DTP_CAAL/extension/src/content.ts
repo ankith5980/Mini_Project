@@ -50,37 +50,44 @@ function detectTechStack() {
     };
     
     const html = document.documentElement.outerHTML.toLowerCase();
-    const scripts = Array.from(document.scripts).map(s => s.src.toLowerCase());
+    const scriptsSrc = Array.from(document.scripts).map(s => s.src.toLowerCase());
+    const inlineScripts = Array.from(document.scripts).map(s => s.innerHTML.toLowerCase()).join(' ');
     const metaGenerator = document.querySelector('meta[name="generator"]')?.getAttribute('content')?.toLowerCase() || '';
 
+    // Helper to check if a keyword exists in external script URLs or inline scripts
+    const hasScript = (keyword: string) => scriptsSrc.some(s => s.includes(keyword)) || inlineScripts.includes(keyword);
+
     // JavaScript Frameworks & Web frameworks
-    if (document.getElementById('__next') || scripts.some(s => s.includes('_next/static'))) {
+    if (document.getElementById('__next') || hasScript('_next/static')) {
         add('Next.js', 'Web frameworks');
         add('Next.js', 'Static site generators');
         add('React', 'JavaScript frameworks');
-    } else if (document.querySelector('[data-reactroot], [data-reactid], [id="root"]') || scripts.some(s => s.includes('react') || s.includes('react-dom')) || html.includes('__react_')) {
+    } else if (document.querySelector('[data-reactroot], [data-reactid], [id="root"]') || hasScript('react') || hasScript('react-dom') || html.includes('__react_')) {
         add('React', 'JavaScript frameworks');
     }
     
-    if (document.getElementById('__nuxt') || scripts.some(s => s.includes('_nuxt/'))) {
+    if (document.getElementById('__nuxt') || hasScript('_nuxt/')) {
         add('Nuxt.js', 'Web frameworks');
         add('Vue.js', 'JavaScript frameworks');
-    } else if (document.querySelector('[data-v-app]') || scripts.some(s => s.includes('vue'))) {
+    } else if (document.querySelector('[data-v-app]') || hasScript('vue')) {
         add('Vue.js', 'JavaScript frameworks');
     }
     
-    if (document.querySelector('[ng-app], [ng-version], [data-ng-app]') || scripts.some(s => s.includes('angular'))) {
+    if (document.querySelector('[ng-app], [ng-version], [data-ng-app]') || hasScript('angular')) {
         add('Angular', 'JavaScript frameworks');
+    }
+    if (hasScript('svelte') || document.querySelector('[class^="svelte-"]')) {
+        add('Svelte', 'JavaScript frameworks');
     }
 
     // UI frameworks
-    if (document.querySelector('[class*="flex "], [class*="text-"], [class*="bg-"]')) {
+    if (document.querySelector('[class*="flex "], [class*="text-"], [class*="bg-"]') || hasScript('tailwindcss')) {
         add('Tailwind CSS', 'UI frameworks');
     }
-    if (html.includes('bootstrap.css') || html.includes('bootstrap.min.css') || html.includes('bootstrap-')) {
+    if (html.includes('bootstrap.css') || html.includes('bootstrap.min.css') || html.includes('bootstrap-') || hasScript('bootstrap')) {
         add('Bootstrap', 'UI frameworks');
     }
-    if (html.includes('mui-') || document.querySelector('[class*="Mui"]')) {
+    if (html.includes('mui-') || document.querySelector('[class*="Mui"]') || hasScript('@mui')) {
         add('Material UI', 'UI frameworks');
     }
     if (html.includes('radix-') || document.querySelector('[data-radix-poppable], [data-radix-collection-item]')) {
@@ -89,54 +96,63 @@ function detectTechStack() {
     if (html.includes('radix-') && html.includes('lucide-')) {
         add('shadcn/ui', 'UI frameworks');
     }
+    if (hasScript('framer-motion') || document.querySelector('[data-framer-name], [data-framer-component-type]')) {
+        add('Framer Motion', 'JavaScript libraries');
+    }
 
     // CMS
     if (html.includes('wp-content') || metaGenerator.includes('wordpress')) {
         add('WordPress', 'CMS');
     }
-    if (metaGenerator.includes('webflow')) {
+    if (metaGenerator.includes('webflow') || html.includes('w-webflow')) {
         add('Webflow', 'CMS');
     }
-    if (html.includes('cdn.shopify.com')) {
+    if (html.includes('cdn.shopify.com') || window.hasOwnProperty('Shopify')) {
         add('Shopify', 'CMS');
     }
 
     // JavaScript libraries
-    if (scripts.some(s => s.includes('gsap') || s.includes('tweenmax')) || html.includes('gsap.')) {
-        add('GSAP', 'JavaScript frameworks'); // Matching user's image where GSAP is under JS frameworks
+    if (hasScript('gsap') || hasScript('tweenmax') || html.includes('gsap.')) {
+        add('GSAP', 'JavaScript frameworks'); 
     }
-    if (scripts.some(s => s.includes('three.js') || s.includes('three.min.js') || s.includes('/three/')) || html.includes('three.js')) {
+    if (hasScript('three.js') || hasScript('three.min.js') || hasScript('/three/') || html.includes('three.js')) {
         add('Three.js', 'JavaScript libraries');
     }
-    if (html.includes('framer-motion') || document.querySelector('[data-framer-name], [data-framer-component-type]')) {
-        add('Framer Motion', 'JavaScript libraries');
-    }
-    if (scripts.some(s => s.includes('lottie')) || document.querySelector('lottie-player, [data-lottie]')) {
+    if (hasScript('lottie') || document.querySelector('lottie-player, [data-lottie]')) {
         add('Lottie', 'JavaScript libraries');
     }
-    if (scripts.some(s => s.includes('anime.js') || s.includes('anime.min.js'))) {
+    if (hasScript('anime.js') || hasScript('anime.min.js') || hasScript('anime(')) {
         add('Anime.js', 'JavaScript libraries');
     }
-    if (document.querySelector('[data-scroll-container]') || html.includes('locomotive-scroll')) {
+    if (document.querySelector('[data-scroll-container]') || html.includes('locomotive-scroll') || hasScript('locomotive-scroll')) {
         add('Locomotive Scroll', 'JavaScript libraries');
     }
-    if (scripts.some(s => s.includes('lenis')) || html.includes('lenis')) {
+    if (hasScript('lenis') || html.includes('lenis')) {
         add('Lenis', 'JavaScript libraries');
+    }
+    if (hasScript('jquery')) {
+        add('jQuery', 'JavaScript libraries');
+    }
+    if (hasScript('lodash') || hasScript('underscore')) {
+        add('Lodash', 'JavaScript libraries');
+    }
+    if (hasScript('axios')) {
+        add('Axios', 'JavaScript libraries');
     }
 
     // Font scripts
     if (html.includes('lucide') || html.includes('lucide-react')) {
         add('Lucide', 'Font scripts');
     }
-    if (html.includes('fontawesome') || html.includes('font-awesome')) {
+    if (html.includes('fontawesome') || html.includes('font-awesome') || hasScript('fontawesome')) {
         add('Font Awesome', 'Font scripts');
     }
 
     // Security
-    if (scripts.some(s => s.includes('challenges.cloudflare.com/turnstile')) || html.includes('turnstile')) {
+    if (hasScript('challenges.cloudflare.com/turnstile') || html.includes('turnstile')) {
         add('Cloudflare Turnstile', 'Security');
     }
-    if (scripts.some(s => s.includes('recaptcha'))) {
+    if (hasScript('recaptcha')) {
         add('reCAPTCHA', 'Security');
     }
 
@@ -144,7 +160,7 @@ function detectTechStack() {
     if (html.includes('turbopack') || html.includes('_next/static/webpack')) {
         add('Turbopack', 'Development');
     }
-    if (html.includes('vite')) {
+    if (html.includes('vite') || hasScript('@vite')) {
         add('Vite', 'Development');
     }
 
@@ -159,6 +175,14 @@ function detectTechStack() {
     // Miscellaneous
     if (document.querySelector('meta[property^="og:"]')) {
         add('Open Graph', 'Miscellaneous');
+    }
+
+    // Analytics
+    if (hasScript('google-analytics') || hasScript('gtag') || hasScript('ga.js')) {
+        add('Google Analytics', 'Analytics');
+    }
+    if (hasScript('segment')) {
+        add('Segment', 'Analytics');
     }
 
     return stack;

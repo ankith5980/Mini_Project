@@ -1,11 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "DTP_CAAL Accessibility Linter",
+  "name": "Context-Aware Accessibility Linter",
   "version": "1.0.0",
   "description": "Context Aware Accessibility Linter powered by AI",
+  "icons": {
+    "16": "CAAL_LOGO.png",
+    "48": "CAAL_LOGO.png",
+    "128": "CAAL_LOGO.png"
+  },
   "action": {
     "default_popup": "index.html",
-    "default_title": "Open Accessibility Linter"
+    "default_icon": "CAAL_LOGO.png",
+    "default_title": "Open Context-Aware Accessibility Linter"
   },
   "background": {
     "service_worker": "src/background.ts",
