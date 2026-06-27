@@ -105,3 +105,35 @@ Developer Tools Path: Context Aware Accessibility Linter
 - Package this tool into a GitHub Action or a CI/CD pipeline integration. 
 - Whenever a developer opens a Pull Request, your system automatically spins up the frontend, runs visual and structural accessibility tests, and automatically blocks the merge—or generates a fix commit—if the new code breaks accessibility standards. 
 - This is highly marketable as a B2B SaaS product.
+
+
+**Working Instructions (For End Users)::**
+
+Now that the tool is ready for public distribution, anyone can use it easily without needing to clone the repository!
+
+### Using the CLI via NPM (npx)
+You can run the accessibility audit on any project instantly using `npx`. 
+
+1. Ensure you have your target web application running (e.g., `http://localhost:3000`).
+2. Set your API key in your terminal environment:
+   ```bash
+   # On macOS/Linux:
+   export GROQ_API_KEY="your_api_key_here"
+   
+   # On Windows (PowerShell):
+   $env:GROQ_API_KEY="your_api_key_here"
+   ```
+3. Run the audit directly from NPM:
+   ```bash
+   # Basic Scan
+   npx dtp-caal --url http://localhost:3000
+
+   # Automated Source Code Remediation (Auto-Fix)
+   npx dtp-caal --url http://localhost:3000 --auto-fix --src-dir ./src
+   ```
+
+### Using the Chrome Extension (CURRENTLY NOT AVAILABLE)
+1. Install the **Context-Aware Accessibility Linter** extension from the Chrome Web Store.
+2. Navigate to the website or local web app you want to test.
+3. Open the extension popup, ensure the backend API URL is configured correctly if you are hosting your own instance, and click **Analyze**.
+4. The extension will highlight broken elements in red and provide you with the exact AI-generated code to fix them!

@@ -1,8 +1,10 @@
+const API_URL = 'http://localhost:3000/api/v1/analyze'; // TODO: Change this to your public Render URL before publishing
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'analyzeElement') {
     try {
       // Forward the request to our Node.js backend
-      fetch('http://localhost:3000/api/v1/analyze', {
+      fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -27,9 +29,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
       
       return true; // Indicates we will send response asynchronously
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Sync error in background script:', err);
-      sendResponse({ error: 'Internal extension error', details: err.message });
+      sendResponse({ error: 'Internal extension error', details: err instanceof Error ? err.message : String(err) });
     }
   }
 });
