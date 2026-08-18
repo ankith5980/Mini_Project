@@ -115,7 +115,7 @@ DO NOT wrap the response in markdown code blocks. OUTPUT ONLY THE RAW CODE.
                         content: prompt
                     }
                 ],
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
             });
             let newContent = completion.choices[0]?.message?.content || '';
             // Just in case it wraps in markdown despite instructions

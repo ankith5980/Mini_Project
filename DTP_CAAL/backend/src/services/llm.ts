@@ -60,7 +60,7 @@ Return a JSON object with this exact structure:
                         content: prompt
                     }
                 ],
-                model: 'llama-3.3-70b-versatile',
+                model: 'openai/gpt-oss-120b',
                 response_format: { type: 'json_object' }
             });
 
