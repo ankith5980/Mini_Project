@@ -1,7 +1,7 @@
 {
   "name": "dtp-caal",
   "version": "1.0.0",
-  "description": "",
+  "description": "Context-Aware Accessibility Linter CLI powered by Playwright and LLMs",
   "main": "dist/index.js",
   "bin": {
     "dtp-caal": "./dist/index.js"
