@@ -12,7 +12,7 @@ const program = new Command();
 program
   .name('a11y-audit')
   .description('Context-Aware Accessibility Linter CLI')
-  .version('1.0.0')
+  .version('1.0.1')
   .requiredOption('-u, --url <url>', 'URL to scan (e.g., http://localhost:3000)', 'http://localhost:3000')
   .option('-o, --output <path>', 'Output file path', './caal-report.md')
   .option('-f, --format <format>', 'Output format (json or md)', 'md')
