@@ -41,6 +41,14 @@ jobs:
           npm run build
           npx playwright install --with-deps chromium
 
+      # Unchanged elements reuse their previous verdict, so results stay consistent between runs
+      - name: Restore Verdict Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: DTP_CAAL/cli/.caal-cache.json
+          key: caal-verdicts-${{ github.run_id }}
+          restore-keys: caal-verdicts-
+
       - name: Run Accessibility Audit with Auto-Fix
         id: a11y_audit
         continue-on-error: true
@@ -49,7 +57,15 @@ jobs:
         run: |
           cd DTP_CAAL/cli
           node dist/index.js --url http://localhost:3000 --output ../../caal-report.md --format md --auto-fix --src-dir ../../
-      
+
+      # Saved even when the audit finds issues (the job fails then, and actions/cache would skip saving)
+      - name: Save Verdict Cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: DTP_CAAL/cli/.caal-cache.json
+          key: caal-verdicts-${{ github.run_id }}
+
       - name: Generate Git Diff for Fixes
         id: git_diff
         run: |
@@ -77,7 +93,7 @@ jobs:
               if (patch) {
                 body += `\n\n### 🛠️ Automated Fixes Available\n\n`;
                 body += `I have generated automated source code fixes for these issues! The changed files have been left uncommitted for you to verify manually.\n`;
-                body += `> **Action Required:** Please review the diff below and apply the changes to your branch, or run \`npx a11y-audit --auto-fix\` locally.\n\n`;
+                body += `> **Action Required:** Please review the diff below and apply the changes to your branch, or run \`npx dtp-caal --auto-fix\` locally.\n\n`;
                 body += `<details><summary>View Git Diff</summary>\n\n\`\`\`diff\n${patch}\n\`\`\`\n\n</details>`;
               }
               

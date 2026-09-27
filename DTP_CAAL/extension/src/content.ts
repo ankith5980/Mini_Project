@@ -1,17 +1,31 @@
 // Content script to extract DOM and highlight elements
 console.log('DTP_CAAL Content Script Loaded');
 
+// Our own data-caal-* markers must never reach the LLM: they would leak into suggested fixes
+// and make the same element's HTML (and so its cache key) depend on earlier scans
+function stripCaalAttributes(root: HTMLElement) {
+    for (const el of [root, ...Array.from(root.querySelectorAll('*'))]) {
+        for (const attr of Array.from(el.attributes)) {
+            if (attr.name.startsWith('data-caal-')) el.removeAttribute(attr.name);
+        }
+    }
+}
+
 export function extractContext(element: HTMLElement) {
     const parent = element.parentElement;
-    
+
+    const elementClone = element.cloneNode(true) as HTMLElement;
+    stripCaalAttributes(elementClone);
+
     let parentHtml = '';
     if (parent) {
         // Clone to avoid modifying the actual page
         const clone = parent.cloneNode(true) as HTMLElement;
-        
+
         // Remove massive irrelevant tags that blow up the LLM context window on localhost
         clone.querySelectorAll('script, style').forEach(el => el.remove());
-        
+        stripCaalAttributes(clone);
+
         parentHtml = clone.outerHTML;
         // Truncate to a safe size (~15k chars is well within Groq limits)
         if (parentHtml.length > 15000) {
@@ -20,27 +34,37 @@ export function extractContext(element: HTMLElement) {
     }
     
     return {
-        elementHtml: element.outerHTML,
+        elementHtml: elementClone.outerHTML,
         parentHtml
     };
 }
 
+// Marks elements that had no style attribute, so removing the highlight can drop it again
+const NO_STYLE = '__caal_none__';
+
 export function highlightElement(element: HTMLElement, isError: boolean) {
-    // Save original outline just in case
-    element.setAttribute('data-original-outline', element.style.outline);
+    // Save the exact original style attribute so the element's HTML is identical after the highlight is removed
+    if (!element.hasAttribute('data-caal-original-style')) {
+        element.setAttribute('data-caal-original-style', element.getAttribute('style') ?? NO_STYLE);
+    }
     element.style.outline = isError ? '3px solid red' : '3px solid green';
     element.style.outlineOffset = '2px';
 }
 
 export function removeHighlight(element: HTMLElement) {
-    const original = element.getAttribute('data-original-outline');
-    if (original !== null) {
-        element.style.outline = original;
-        element.removeAttribute('data-original-outline');
+    const original = element.getAttribute('data-caal-original-style');
+    if (original === null) return;
+    element.style.removeProperty('outline');
+    element.style.removeProperty('outline-offset');
+    // Chromium writes CSSOM changes back to the style attribute lazily. Reading it flushes that write now;
+    // otherwise it happens after removeAttribute (e.g. on the next cloneNode) and leaves style="" behind
+    element.getAttribute('style');
+    if (original === NO_STYLE) {
+        element.removeAttribute('style');
     } else {
-        element.style.outline = '';
+        element.setAttribute('style', original);
     }
-    element.style.outlineOffset = '';
+    element.removeAttribute('data-caal-original-style');
 }
 
 function detectTechStack() {
@@ -216,9 +240,10 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
         const target = document.querySelector(`[data-caal-id="${id}"]`) as HTMLElement;
         
         if (target) {
+            // Clear the previous highlight first so its outline style isn't captured in this element's context
+            if (currentSelectedElement) removeHighlight(currentSelectedElement);
             const context = extractContext(target);
             // Highlight it while analyzing
-            if (currentSelectedElement) removeHighlight(currentSelectedElement);
             highlightElement(target, true);
             currentSelectedElement = target;
             

@@ -18,6 +18,7 @@ interface AnalysisResult {
   explanation?: string;
   suggestedFixCode?: string;
   fixReasoning?: string;
+  cached?: boolean;
 }
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [techStack, setTechStack] = useState<TechItem[]>([]);
   const [isStackExpanded, setIsStackExpanded] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     scanPage();
@@ -74,7 +76,8 @@ function App() {
     }
   };
 
-  const analyzeElement = async (id: string) => {
+  // noCache asks for a fresh verdict, which then replaces the cached one
+  const analyzeElement = async (id: string, noCache = false) => {
     setSelectedId(id);
     setAnalysis(null);
     setLoading(true);
@@ -88,7 +91,7 @@ function App() {
           if (response && response.context) {
              chrome.runtime.sendMessage({
                 action: 'analyzeElement',
-                payload: response.context
+                payload: { ...response.context, noCache }
              }, (bgResponse) => {
                 setLoading(false);
                 if (bgResponse && bgResponse.error) {
@@ -120,6 +123,21 @@ function App() {
     }
   };
 
+  const clearCache = () => {
+    chrome.runtime.sendMessage({ action: 'clearCache' }, (response) => {
+      if (chrome.runtime.lastError || !response || response.error) {
+        setError(`Failed to clear cache${response?.details ? `: ${response.details}` : ''}`);
+        return;
+      }
+      // The shown verdict may have come from the cache that was just cleared
+      setAnalysis(null);
+      setSelectedId(null);
+      clearHighlights();
+      setNotice(`Cleared ${response.cleared} cached result${response.cleared === 1 ? '' : 's'}. Next analyses will be fresh.`);
+      setTimeout(() => setNotice(null), 4000);
+    });
+  };
+
   const retryLastAction = () => {
     if (selectedId) {
       analyzeElement(selectedId);
@@ -141,8 +159,13 @@ function App() {
           <img src="/CAAL_LOGO.png" alt="CAAL Logo" width="24" height="24" style={{ borderRadius: '4px', marginRight: '8px' }} />
           Context-Aware Accessibility Linter
         </h1>
-        <button onClick={scanPage} className="rescan-btn" disabled={loading}>Rescan Page</button>
+        <div className="header-actions">
+          <button onClick={clearCache} className="rescan-btn" disabled={loading}>Clear Cache</button>
+          <button onClick={scanPage} className="rescan-btn" disabled={loading}>Rescan Page</button>
+        </div>
       </header>
+
+      {notice && <div className="notice-banner" role="status">{notice}</div>}
 
       {error && (
         <div className="error-banner">
@@ -228,8 +251,18 @@ function App() {
 
           {!loading && analysis && (
             <div className="analysis-result">
-              <div className={`status ${analysis.isAccessible ? 'pass' : 'fail'}`}>
-                {analysis.isAccessible ? 'Accessible' : 'Accessibility Issue Found'}
+              <div className="status-row">
+                <div className={`status ${analysis.isAccessible ? 'pass' : 'fail'}`}>
+                  {analysis.isAccessible ? 'Accessible' : 'Accessibility Issue Found'}
+                </div>
+                {analysis.cached && selectedId && (
+                  <div className="cache-info">
+                    <span className="cached-badge">Cached result</span>
+                    <button className="reanalyze-btn" onClick={() => analyzeElement(selectedId, true)}>
+                      Re-analyze
+                    </button>
+                  </div>
+                )}
               </div>
               
               {!analysis.isAccessible && (

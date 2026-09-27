@@ -140,8 +140,31 @@ dtp-caal --url http://localhost:3000 --format json --output ./reports/a11y-resul
 | `--format <format>`| `-f` | `md` | Output format: `md` (Markdown) or `json` (JSON). |
 | `--auto-fix` | | `false` | Automatically attempt to locate and patch source files. |
 | `--src-dir <path>` | | `./` | Directory containing source files when `--auto-fix` is enabled. |
+| `--cache <path>` | | `./.caal-cache.json` | Verdict cache file. Unchanged elements reuse their previous verdict. |
+| `--no-cache` | | | Ignore the cache and analyze every element fresh (nothing is read or written). |
 | `--help` | `-h` | | Display help and argument descriptions. |
-| `--version` | `-v` | | Display CLI version. |
+| `--version` | `-V` | | Display CLI version. |
+
+---
+
+## 🔁 Consistent Results (Verdict Cache)
+
+LLMs are not fully deterministic: even with temperature `0` and a fixed seed, asking the model about the same element twice can occasionally produce a different verdict. To keep audits stable, `dtp-caal` caches every verdict:
+
+- Each element is fingerprinted from its HTML and its parent's HTML (plus the model and prompt version). Markup that changes on every page load without changing meaning (React `useId()` values, `nonce` attributes, HTML comments, whitespace) is ignored.
+- If an element is unchanged since a previous run, its cached verdict is reused and no API call is made. Only new or changed elements are sent to the model.
+- Identical elements within one run (e.g. the same nav link on every card) are analyzed once.
+- Entries not used for 30 days are dropped automatically.
+
+To share verdicts across machines, either commit `.caal-cache.json` to your repository or persist it in CI (see the GitHub Actions example below). Delete the file, or use `--no-cache`, to force a completely fresh audit.
+
+### Exit Codes
+
+| Code | Meaning |
+| :--- | :--- |
+| `0` | All analyzed elements passed. |
+| `1` | Accessibility issues were found (or the audit crashed). |
+| `2` | No issues found, but some elements could not be analyzed because of API errors (rate limits, invalid key). These are listed under **Not Analyzed** in the report and are never cached, so re-running retries only them. |
 
 ---
 
@@ -173,10 +196,10 @@ dtp-caal --url http://localhost:3000 --format json --output ./reports/a11y-resul
 ```
 
 1. **Extraction:** Playwright launches headless Chromium, navigates to the specified URL, waits for network idle, and queries target elements (`button`, `img`, `input`, `a`, `[role="button"]`, etc.). For each element, it extracts both the element's markup and sanitized parent container HTML.
-2. **Contextual Analysis:** Each element is analyzed using Groq's LLM endpoint. The prompt instructs the model to act as an accessibility engineer, identifying WCAG failures and synthesizing valid replacement markup.
+2. **Contextual Analysis:** Each element is first looked up in the verdict cache; only new or changed elements are analyzed using Groq's LLM endpoint (temperature `0`, fixed seed, strict JSON schema). The prompt instructs the model to act as an accessibility engineer, identifying WCAG failures and synthesizing valid replacement markup.
 3. **Reporting:** Results are structured into either a Markdown document or JSON file.
 4. **Remediation:** If `--auto-fix` is passed, the tool searches the specified `--src-dir` for files containing matching tokens, prompts the LLM to integrate the accessibility fix while preserving framework syntax (JSX, Vue, standard HTML), and updates the source files.
-5. **Exit Code:** If any element fails WCAG checks, the CLI terminates with exit code `1`, making it ideal for CI/CD gates.
+5. **Exit Code:** If any element fails WCAG checks, the CLI terminates with exit code `1`, making it ideal for CI/CD gates (see [Exit Codes](#exit-codes)).
 
 ---
 
@@ -216,6 +239,13 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Restore Verdict Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .caal-cache.json
+          key: caal-verdicts-${{ github.run_id }}
+          restore-keys: caal-verdicts-
+
       - name: Run Accessibility Audit
         id: a11y_audit
         continue-on-error: true
@@ -223,6 +253,14 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           npx dtp-caal --url http://localhost:3000 --output ./caal-report.md --auto-fix --src-dir ./src
+
+      # Save even when the audit fails, so the next run reuses these verdicts
+      - name: Save Verdict Cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .caal-cache.json
+          key: caal-verdicts-${{ github.run_id }}
 
       - name: Generate Fix Patch
         id: git_diff

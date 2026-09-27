@@ -3,17 +3,41 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.analyzeElement = analyzeElement;
+exports.isUnanalysed = exports.isIssue = exports.DETERMINISTIC_PARAMS = exports.MODEL = void 0;
 exports.analyzeElements = analyzeElements;
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const cache_1 = require("./cache");
 dotenv_1.default.config();
 const apiKey = process.env.GROQ_API_KEY || '';
 const groq = new groq_sdk_1.default({ apiKey });
+exports.MODEL = 'openai/gpt-oss-120b';
+// Fixed sampling settings so the same input gets the same answer as often as the API allows
+exports.DETERMINISTIC_PARAMS = { temperature: 0, seed: 42, reasoning_effort: 'medium' };
+// Bump whenever the prompt or schema changes, so verdicts cached under the old prompt are not reused
+const PROMPT_VERSION = '2';
+const nullableString = { type: ['string', 'null'] };
+const VERDICT_SCHEMA = {
+    type: 'object',
+    properties: {
+        isAccessible: { type: 'boolean' },
+        issueTitle: nullableString,
+        explanation: nullableString,
+        suggestedFixCode: nullableString,
+        fixReasoning: nullableString
+    },
+    required: ['isAccessible', 'issueTitle', 'explanation', 'suggestedFixCode', 'fixReasoning'],
+    additionalProperties: false
+};
+// An element that could not be analysed (API error) is not an accessibility issue; it is reported separately
+const isIssue = (r) => !r.error && !r.isAccessible;
+exports.isIssue = isIssue;
+const isUnanalysed = (r) => Boolean(r.error);
+exports.isUnanalysed = isUnanalysed;
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
-async function analyzeElement(element) {
+async function requestVerdict(element) {
     const prompt = `
-You are an expert accessibility engineer. Your task is to analyze an HTML/JSX element within its parent context to determine if it meets WCAG accessibility standards. 
+You are an expert accessibility engineer. Your task is to analyze an HTML/JSX element within its parent context to determine if it meets WCAG accessibility standards.
 You must output ONLY valid JSON without any markdown code blocks or conversational text.
 
 Context:
@@ -47,7 +71,7 @@ Return a JSON object with this exact structure:
 `;
     let retries = 3;
     let delayMs = 2000;
-    while (retries > 0) {
+    while (true) {
         try {
             const completion = await groq.chat.completions.create({
                 messages: [
@@ -60,59 +84,73 @@ Return a JSON object with this exact structure:
                         content: prompt
                     }
                 ],
-                model: 'openai/gpt-oss-120b',
-                response_format: { type: 'json_object' }
+                model: exports.MODEL,
+                ...exports.DETERMINISTIC_PARAMS,
+                response_format: {
+                    type: 'json_schema',
+                    json_schema: { name: 'accessibility_verdict', schema: VERDICT_SCHEMA, strict: true }
+                }
             });
             const text = completion.choices[0]?.message?.content;
-            if (text) {
-                const parsed = JSON.parse(text);
-                return {
-                    ...element,
-                    ...parsed
-                };
+            if (!text) {
+                throw new Error("No text in response");
             }
-            throw new Error("No text in response");
+            const parsed = JSON.parse(text);
+            if (!(0, cache_1.isVerdict)(parsed)) {
+                throw new Error("Response did not match the verdict schema");
+            }
+            return {
+                isAccessible: parsed.isAccessible,
+                issueTitle: parsed.issueTitle,
+                explanation: parsed.explanation,
+                suggestedFixCode: parsed.suggestedFixCode,
+                fixReasoning: parsed.fixReasoning
+            };
         }
         catch (error) {
-            if (error.status === 503 || error.status === 429 || error.message?.includes('503') || error.message?.includes('429')) {
-                console.warn(`[WARN] Rate limited. Retries left: ${retries - 1}. Retrying in ${delayMs}ms...`);
-                retries--;
-                if (retries === 0) {
-                    return {
-                        ...element,
-                        isAccessible: false,
-                        error: "Failed to analyze due to API rate limits."
-                    };
-                }
-                await delay(delayMs);
-                delayMs *= 2;
+            const retryable = error.status === 503 || error.status === 429 || error.message?.includes('503') || error.message?.includes('429');
+            retries--;
+            if (!retryable || retries === 0) {
+                throw retryable ? new Error("Failed to analyze due to API rate limits.") : error;
             }
-            else {
-                return {
-                    ...element,
-                    isAccessible: false,
-                    error: error.message || "Unknown API error"
-                };
-            }
+            console.warn(`[WARN] Rate limited. Retries left: ${retries}. Retrying in ${delayMs}ms...`);
+            await delay(delayMs);
+            delayMs *= 2;
         }
     }
-    return {
-        ...element,
-        isAccessible: false,
-        error: "Exhausted retries"
-    };
 }
-async function analyzeElements(elements) {
+async function analyzeElements(elements, cache) {
     const results = [];
+    let apiCalls = 0;
     console.log(`Analyzing ${elements.length} elements using Groq API...`);
     for (let i = 0; i < elements.length; i++) {
-        // Log progress
-        console.log(`Analyzing element ${i + 1}/${elements.length}: <${elements[i].tagName}>...`);
-        const result = await analyzeElement(elements[i]);
-        results.push(result);
+        const element = elements[i];
+        const key = (0, cache_1.cacheKey)(exports.MODEL, PROMPT_VERSION, element.elementHtml, element.parentHtml);
+        // Cache hits cover both earlier runs and identical elements earlier in this run
+        const cachedVerdict = cache.get(key);
+        if (cachedVerdict) {
+            console.log(`Analyzing element ${i + 1}/${elements.length}: <${element.tagName}> (cached)`);
+            results.push({ ...element, ...cachedVerdict, cached: true });
+            continue;
+        }
         // Wait briefly between requests to avoid rate limits
-        if (i < elements.length - 1) {
+        if (apiCalls > 0) {
             await delay(1000);
+        }
+        apiCalls++;
+        console.log(`Analyzing element ${i + 1}/${elements.length}: <${element.tagName}>...`);
+        try {
+            const verdict = await requestVerdict(element);
+            cache.set(key, verdict);
+            results.push({ ...element, ...verdict, cached: false });
+        }
+        catch (error) {
+            // Errors are never cached, so the next run retries this element
+            results.push({ ...element, isAccessible: false, error: error.message || "Unknown API error" });
+        }
+        // Persist progress periodically so an interrupted run keeps what it already paid for
+        if (apiCalls % 20 === 0) {
+            cache.save();
         }
     }
     return results;

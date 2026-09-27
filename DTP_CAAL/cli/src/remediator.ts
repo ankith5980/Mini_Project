@@ -3,7 +3,7 @@ import { glob } from 'glob';
 import path from 'path';
 import Groq from 'groq-sdk';
 import chalk from 'chalk';
-import { AnalysisResult } from './analyzer';
+import { AnalysisResult, DETERMINISTIC_PARAMS, MODEL } from './analyzer';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -129,7 +129,8 @@ DO NOT wrap the response in markdown code blocks. OUTPUT ONLY THE RAW CODE.
                         content: prompt
                     }
                 ],
-                model: 'openai/gpt-oss-120b',
+                model: MODEL,
+                ...DETERMINISTIC_PARAMS,
             });
 
             let newContent = completion.choices[0]?.message?.content || '';

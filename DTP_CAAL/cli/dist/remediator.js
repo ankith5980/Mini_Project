@@ -8,6 +8,7 @@ const fs_1 = __importDefault(require("fs"));
 const glob_1 = require("glob");
 const groq_sdk_1 = __importDefault(require("groq-sdk"));
 const chalk_1 = __importDefault(require("chalk"));
+const analyzer_1 = require("./analyzer");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const apiKey = process.env.GROQ_API_KEY || '';
@@ -115,7 +116,8 @@ DO NOT wrap the response in markdown code blocks. OUTPUT ONLY THE RAW CODE.
                         content: prompt
                     }
                 ],
-                model: 'openai/gpt-oss-120b',
+                model: analyzer_1.MODEL,
+                ...analyzer_1.DETERMINISTIC_PARAMS,
             });
             let newContent = completion.choices[0]?.message?.content || '';
             // Just in case it wraps in markdown despite instructions

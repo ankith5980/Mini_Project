@@ -6,3 +6,7 @@ dist/
 .env.*
 !.env.example
 *.log
+
+# Verdict cache written at runtime
+.caal-cache.json
+.caal-cache.json.tmp

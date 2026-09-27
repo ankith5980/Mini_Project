@@ -76,6 +76,20 @@ body {
   border-color: #d1d5db;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.notice-banner {
+  background: var(--pass-bg);
+  color: var(--pass-text);
+  padding: 10px 24px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--pass-border);
+  font-weight: 500;
+}
+
 .error-banner {
   display: flex;
   justify-content: space-between;
@@ -330,6 +344,42 @@ body {
   background: var(--fail-bg);
   color: var(--fail-text);
   border-color: var(--fail-border);
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cache-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cached-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.reanalyze-btn {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  transition: all 0.15s ease;
+}
+
+.reanalyze-btn:hover {
+  background: var(--panel-bg);
+  border-color: #d1d5db;
 }
 
 .analysis-result h3 {
